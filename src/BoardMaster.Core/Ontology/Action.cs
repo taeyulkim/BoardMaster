@@ -64,7 +64,7 @@ namespace BoardMaster.Core.Ontology
                 objNewContext = objEffect.Apply(objNewContext, this);
             }
 
-            objNewContext.mv_lisHistory.Add(mv_stActionData);
+            objNewContext.AppendHistory(mv_stActionData);
 
             return objNewContext;
         }

@@ -28,8 +28,8 @@ namespace BoardMaster.Core.Rules.Go
                 return p_objContext;
             }
 
-            List<Ont.ST_ActionData> lisHistory = p_objContext.mv_lisHistory;
-            if (lisHistory.Count > 0 && lisHistory[^1].m_isPass)
+            Ont.GameHistory objHistory = p_objContext.mv_lisHistory;
+            if (objHistory.Count > 0 && objHistory.Last.m_isPass)
             {
                 p_objContext.mv_isGameOver = true;
             }

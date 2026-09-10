@@ -9,7 +9,7 @@ namespace BoardMaster.Core.Ontology
         public List<PlayerState> mv_lisPlayers { get; }
         public Dictionary<string, Zone> mv_dicZones { get; }
         public List<Entity> mv_lisEntities { get; }
-        public List<ST_ActionData> mv_lisHistory { get; }
+        public GameHistory mv_lisHistory { get; private set; }
         public bool mv_isGameOver { get; set; }
 
         public GameContext(ST_BoardState p_stInitialState)
@@ -18,8 +18,18 @@ namespace BoardMaster.Core.Ontology
             mv_lisPlayers = new List<PlayerState>();
             mv_dicZones = new Dictionary<string, Zone>();
             mv_lisEntities = new List<Entity>();
-            mv_lisHistory = new List<ST_ActionData>();
+            mv_lisHistory = default; // 빈 이력(꼬리 노드 없음)
             mv_isGameOver = false;
+        }
+
+        /// <summary>
+        /// 현재 행동을 이력에 추가합니다. Action.Execute가 Effect 체인을 다 적용한 직후 호출하는
+        /// 용도이며, O(1)입니다(GameHistory 참고) — 기존 List.Add와 달리 매 Clone()마다 전체 이력을
+        /// 복사할 필요가 없습니다.
+        /// </summary>
+        internal void AppendHistory(ST_ActionData p_stAction)
+        {
+            mv_lisHistory = mv_lisHistory.Append(p_stAction);
         }
 
         /// <summary>
@@ -71,7 +81,10 @@ namespace BoardMaster.Core.Ontology
                 objClone.mv_lisEntities.Add(objClonedEntity);
             }
 
-            objClone.mv_lisHistory.AddRange(mv_lisHistory);
+            // 꼬리 노드 참조만 복사한다(O(1)) — 리스트 전체를 복사하지 않는다. 이후 원본과
+            // 복제본이 각자 AppendHistory를 호출해도 서로 다른 새 노드가 생길 뿐, 기존 노드는
+            // 절대 변경되지 않으므로 격리는 그대로 유지된다.
+            objClone.mv_lisHistory = mv_lisHistory;
 
             return objClone;
         }

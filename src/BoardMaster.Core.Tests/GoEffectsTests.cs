@@ -100,7 +100,7 @@ namespace BoardMaster.Core.Tests
         public static void Effect_CheckConsecutivePassGameEnd_SetsGameOver_WhenPreviousAndCurrentBothPass()
         {
             Ont.GameContext objContext = TestFixtures.CreateContext(p_nSize: 5);
-            objContext.mv_lisHistory.Add(new Ont.ST_ActionData(0, 0, true, Ont.E_PlayerColor.Black)); // 직전 행동 = 패스
+            objContext.AppendHistory(new Ont.ST_ActionData(0, 0, true, Ont.E_PlayerColor.Black)); // 직전 행동 = 패스
 
             DomainAction objAction = new DomainAction("Pass", new Ont.ST_ActionData(0, 0, true, Ont.E_PlayerColor.White));
 
@@ -113,7 +113,7 @@ namespace BoardMaster.Core.Tests
         public static void Effect_CheckConsecutivePassGameEnd_DoesNotEndGame_WhenPreviousWasPlacement()
         {
             Ont.GameContext objContext = TestFixtures.CreateContext(p_nSize: 5);
-            objContext.mv_lisHistory.Add(new Ont.ST_ActionData(2, 2, false, Ont.E_PlayerColor.Black)); // 직전 행동 = 착수
+            objContext.AppendHistory(new Ont.ST_ActionData(2, 2, false, Ont.E_PlayerColor.Black)); // 직전 행동 = 착수
 
             DomainAction objAction = new DomainAction("Pass", new Ont.ST_ActionData(0, 0, true, Ont.E_PlayerColor.White));
 
@@ -126,7 +126,7 @@ namespace BoardMaster.Core.Tests
         public static void Effect_CheckConsecutivePassGameEnd_DoesNotEndGame_WhenCurrentActionIsPlacement()
         {
             Ont.GameContext objContext = TestFixtures.CreateContext(p_nSize: 5);
-            objContext.mv_lisHistory.Add(new Ont.ST_ActionData(0, 0, true, Ont.E_PlayerColor.Black)); // 직전 행동 = 패스
+            objContext.AppendHistory(new Ont.ST_ActionData(0, 0, true, Ont.E_PlayerColor.Black)); // 직전 행동 = 패스
 
             DomainAction objAction = new DomainAction("Place", new Ont.ST_ActionData(2, 2, false, Ont.E_PlayerColor.White));
 
