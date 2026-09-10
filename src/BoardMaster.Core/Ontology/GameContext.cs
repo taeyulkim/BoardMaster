@@ -8,6 +8,7 @@ namespace BoardMaster.Core.Ontology
         public ST_BoardState mv_stCurrentState { get; set; }
         public List<PlayerState> mv_lisPlayers { get; }
         public Dictionary<string, Zone> mv_dicZones { get; }
+        public List<Entity> mv_lisEntities { get; }
         public List<ST_ActionData> mv_lisHistory { get; }
         public bool mv_isGameOver { get; set; }
 
@@ -16,6 +17,7 @@ namespace BoardMaster.Core.Ontology
             mv_stCurrentState = p_stInitialState;
             mv_lisPlayers = new List<PlayerState>();
             mv_dicZones = new Dictionary<string, Zone>();
+            mv_lisEntities = new List<Entity>();
             mv_lisHistory = new List<ST_ActionData>();
             mv_isGameOver = false;
         }
@@ -57,6 +59,16 @@ namespace BoardMaster.Core.Ontology
                     mv_lisAdjacentZoneIDs = new List<string>(objZone.mv_lisAdjacentZoneIDs)
                 };
                 objClone.mv_dicZones.Add(kvpZone.Key, objClonedZone);
+            }
+
+            // Zone을 먼저 복제해 둔 뒤에야 Entity가 "복제된" Zone 인스턴스를 가리키도록 연결할 수 있다.
+            // 원본 Zone 참조를 그대로 물려주면 복제본의 Entity가 원본 GameContext의 Zone 객체를
+            // 계속 가리키게 되어 복제 격리가 깨진다.
+            foreach (Entity objEntity in mv_lisEntities)
+            {
+                Zone objClonedZone = objClone.mv_dicZones[objEntity.mv_objLocatedZone.mv_strZoneID];
+                Entity objClonedEntity = new Entity(objEntity.mv_strEntityID, objEntity.mv_eColor, objEntity.mv_strType, objClonedZone);
+                objClone.mv_lisEntities.Add(objClonedEntity);
             }
 
             objClone.mv_lisHistory.AddRange(mv_lisHistory);
