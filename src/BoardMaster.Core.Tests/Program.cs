@@ -251,6 +251,12 @@ namespace BoardMaster.Core.Tests
                     WarGameSessionTests.PlayRound_KeepsTotalCardCountAt52),
                 ("WarGameSession.PlayUntilGameOver_RunsToCompletion_WithOnePlayerWinningAllCards",
                     WarGameSessionTests.PlayUntilGameOver_RunsToCompletion_WithOnePlayerWinningAllCards),
+                ("WarGameSession.LastRoundResult_IsNull_BeforeAnyRoundIsPlayed",
+                    WarGameSessionTests.LastRoundResult_IsNull_BeforeAnyRoundIsPlayed),
+                ("WarGameSession.LastRoundResult_ReportsBothCardRanks_AndConsistentWinner",
+                    WarGameSessionTests.LastRoundResult_ReportsBothCardRanks_AndConsistentWinner),
+                ("WarGameSession.LastRoundResult_UpdatesAfterEveryRound_AcrossFullGame",
+                    WarGameSessionTests.LastRoundResult_UpdatesAfterEveryRound_AcrossFullGame),
                 ("WarGameSession.PlayRound_Throws_AfterGameHasEnded",
                     WarGameSessionTests.PlayRound_Throws_AfterGameHasEnded),
             };
