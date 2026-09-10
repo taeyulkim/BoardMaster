@@ -38,7 +38,8 @@
 
             <Button x:Name="PassButton" Content="패스" Height="32" Margin="0,0,0,8" Click="PassButton_Click" />
             <Button x:Name="NewGameButton" Content="새 게임" Height="32" Margin="0,0,0,8" Click="NewGameButton_Click" />
-            <Button x:Name="ViewKifuButton" Content="기보 보기" Height="32" Margin="0,0,0,24" Click="ViewKifuButton_Click" />
+            <Button x:Name="ViewKifuButton" Content="기보 보기" Height="32" Margin="0,0,0,8" Click="ViewKifuButton_Click" />
+            <Button x:Name="ViewRulesButton" Content="규칙 보기" Height="32" Margin="0,0,0,24" Click="ViewRulesButton_Click" />
 
             <TextBlock x:Name="ResultText" FontSize="13" FontWeight="Bold" TextWrapping="Wrap" Foreground="#B71C1C" Margin="0,0,0,16" />
 

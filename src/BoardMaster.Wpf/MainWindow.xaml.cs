@@ -141,6 +141,33 @@ namespace BoardMaster.Wpf
             objReplayWindow.Show();
         }
 
+        private void ViewRulesButton_Click(object sender, RoutedEventArgs e)
+        {
+            RulesWindow objRulesWindow = new RulesWindow("바둑 규칙", GoRulesText) { Owner = this };
+            objRulesWindow.Show();
+        }
+
+        private const string GoRulesText =
+@"보드: 9x9, 흑이 먼저 둡니다.
+
+착수
+빈 칸에만 돌을 놓을 수 있습니다. 턴마다 흑/백이 번갈아 착수하거나 패스합니다.
+
+따내기(포획)
+내가 둔 수로 상대 돌 그룹이 활로(인접한 빈 칸)를 모두 잃으면 그 그룹 전체가 즉시 반상에서 제거됩니다.
+
+자충수 금지
+내 그룹이 활로를 하나도 못 남기는 수는 원칙적으로 금지됩니다 — 단, 그 수로 상대 그룹을 따내서 활로가 생기는 경우는 예외로 허용됩니다.
+
+패(Ko) 금지
+직전에 상대가 단수로 만든 돌 하나를 곧바로 되따내는 것(단순패)은 금지됩니다. 이보다 넓게, 지금까지 한 번이라도 나왔던 반상 배치를 그대로 다시 만드는 수(위치 기반 슈퍼코, 삼패 등 포함)도 전부 금지됩니다.
+
+종국과 계가
+연속으로 두 번 패스하면 대국이 끝납니다. 점수는 중국식(면적) 계가입니다 — 반상의 내 돌 수 + 완전히 내 돌로만 둘러싸인 빈 집의 수. 덤(komi)은 적용하지 않습니다.
+
+AI
+정책망/가치망 없는 순수 MCTS(UCT)입니다. 난이도는 탐색 반복 횟수만 다릅니다 — 반복이 많을수록 통계가 정확해져 더 강해지지만, ""약하게 두는"" 별도 로직은 없습니다.";
+
         private void DifficultyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (DifficultyComboBox.SelectedItem is ComboBoxItem objItem

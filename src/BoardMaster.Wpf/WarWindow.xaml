@@ -61,6 +61,7 @@
             <Button x:Name="PlayRoundButton" Content="한 라운드" Width="110" Height="34" Margin="4" Click="PlayRoundButton_Click" />
             <Button x:Name="AutoPlayButton" Content="자동 재생 시작" Width="130" Height="34" Margin="4" Click="AutoPlayButton_Click" />
             <Button x:Name="NewGameButton" Content="새 게임" Width="90" Height="34" Margin="4" Click="NewGameButton_Click" />
+            <Button x:Name="ViewRulesButton" Content="규칙 보기" Width="90" Height="34" Margin="4" Click="ViewRulesButton_Click" />
         </StackPanel>
     </Grid>
 </Window>

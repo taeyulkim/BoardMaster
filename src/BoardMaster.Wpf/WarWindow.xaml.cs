@@ -73,6 +73,34 @@ namespace BoardMaster.Wpf
 
         private void NewGameButton_Click(object sender, RoutedEventArgs e) => StartNewGame();
 
+        private void ViewRulesButton_Click(object sender, RoutedEventArgs e)
+        {
+            RulesWindow objRulesWindow = new RulesWindow("War 규칙", WAR_RULES_TEXT) { Owner = this };
+            objRulesWindow.Show();
+        }
+
+        private const string WAR_RULES_TEXT =
+@"카드: 표준 52장을 섞어 흑/백에게 26장씩 뒷면으로 나눠줍니다. 무늬(수트)는 승패에 영향을 주지 않고 카드 구분용일 뿐입니다.
+
+랭크
+2가 가장 낮고 A(14)가 가장 높습니다. 순서: 2 3 4 5 6 7 8 9 10 J Q K A.
+
+한 라운드
+양쪽이 자기 카드 더미에서 한 장씩 동시에 공개합니다. 랭크가 높은 쪽이 두 장을 전부 가져가 자신의 획득 더미(Pile)에 쌓습니다.
+
+전쟁(War)
+두 카드의 랭크가 같으면 승부가 나지 않고, 그 두 장은 공용 더미(WarPool)에 쌓인 채로 다음 라운드로 넘어갑니다. 다음 라운드의 승자가 쌓여있던 WarPool 카드까지 전부 가져갑니다.
+(참고: 이 구현은 전쟁이 났을 때 카드를 몇 장 더 엎어놓고 그중 한 장으로만 승부를 겨루는 전통적인 서브 배틀 규칙은 생략한 단순화 버전입니다.)
+
+카드 소진
+낼 카드 더미가 비면 그동안 획득한 더미를 다시 뒤섞어 새 카드 더미로 씁니다.
+
+종국
+어느 한쪽이 카드를 전부 잃으면 게임이 끝납니다.
+
+진행 방식
+플레이어가 선택할 것이 없는 게임이라 ""한 라운드"" 버튼으로 한 판씩 보거나, ""자동 재생""으로 끝까지 지켜볼 수 있습니다.";
+
         private void StartAutoPlay()
         {
             if (m_objSession.CurrentPhaseName != "MainPlay")
