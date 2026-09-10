@@ -33,13 +33,24 @@ namespace BoardMaster.Core.AI.Go
         }
 
         /// <summary>
-        /// p_objRootSession의 현재 국면에서 p_nIterations번의 선택-확장-시뮬레이션-역전파를 수행한 뒤,
-        /// 방문 횟수가 가장 많은 루트 자식의 수를 반환합니다(평균 승률보다 방문 횟수가 더 안정적인
-        /// 최종 선택 기준이라는 것이 MCTS의 표준적인 결론입니다). p_objRootSession 자체는 절대
-        /// 변경하지 않습니다 — 탐색은 항상 복제본 위에서만 이루어집니다.
-        /// 이미 종료된 대국이거나 둘 곳이 전혀 없으면 null을 반환합니다(패스를 의미).
+        /// Search()를 돌려 최선의 수 하나만 필요로 하는 호출자를 위한 얇은 래퍼입니다.
+        /// 후보수별 통계(왜 그 수를 골랐는지)까지 필요하면 Search()를 직접 쓰세요.
         /// </summary>
         public (int X, int Y, bool IsPass)? FindBestMove(GoRules.GoGameSession p_objRootSession, int p_nIterations, Random? p_objRandom = null)
+        {
+            return Search(p_objRootSession, p_nIterations, p_objRandom).BestMove;
+        }
+
+        /// <summary>
+        /// p_objRootSession의 현재 국면에서 p_nIterations번의 선택-확장-시뮬레이션-역전파를 수행한 뒤,
+        /// 최선의 수와 루트에서 실제로 펼쳐본 모든 후보 수의 통계(방문 횟수, 추정 승률)를 함께
+        /// 반환합니다. 최선의 수는 방문 횟수가 가장 많은 루트 자식입니다(평균 승률보다 방문 횟수가
+        /// 더 안정적인 최종 선택 기준이라는 것이 MCTS의 표준적인 결론입니다). p_objRootSession
+        /// 자체는 절대 변경하지 않습니다 — 탐색은 항상 복제본 위에서만 이루어집니다.
+        /// 이미 종료된 대국이거나 둘 곳이 전혀 없으면 BestMove가 null이고 CandidateMoves는 빈
+        /// 목록입니다(둘 다 "패스밖에 없다"를 뜻합니다).
+        /// </summary>
+        public GoMctsSearchResult Search(GoRules.GoGameSession p_objRootSession, int p_nIterations, Random? p_objRandom = null)
         {
             if (p_objRootSession is null)
             {
@@ -56,7 +67,7 @@ namespace BoardMaster.Core.AI.Go
 
             if (objRoot.IsTerminal || objRoot.UntriedMoves.Count == 0)
             {
-                return null;
+                return new GoMctsSearchResult(null, Array.Empty<GoMctsCandidateStat>());
             }
 
             for (int i = 0; i < p_nIterations; i++)
@@ -73,19 +84,26 @@ namespace BoardMaster.Core.AI.Go
 
             if (objRoot.Children.Count == 0)
             {
-                return null;
+                return new GoMctsSearchResult(null, Array.Empty<GoMctsCandidateStat>());
             }
 
+            List<GoMctsCandidateStat> lisCandidates = new List<GoMctsCandidateStat>(objRoot.Children.Count);
             GoMctsNode objBestChild = objRoot.Children[0];
-            for (int i = 1; i < objRoot.Children.Count; i++)
+
+            foreach (GoMctsNode objChild in objRoot.Children)
             {
-                if (objRoot.Children[i].VisitCount > objBestChild.VisitCount)
+                double dWinRate = objChild.VisitCount > 0 ? objChild.TotalReward / objChild.VisitCount : 0.0;
+                lisCandidates.Add(new GoMctsCandidateStat(objChild.Move, objChild.VisitCount, dWinRate));
+
+                if (objChild.VisitCount > objBestChild.VisitCount)
                 {
-                    objBestChild = objRoot.Children[i];
+                    objBestChild = objChild;
                 }
             }
 
-            return objBestChild.Move;
+            lisCandidates.Sort((a, b) => b.VisitCount.CompareTo(a.VisitCount));
+
+            return new GoMctsSearchResult(objBestChild.Move, lisCandidates);
         }
 
         private GoMctsNode SelectToExpand(GoMctsNode p_objNode)

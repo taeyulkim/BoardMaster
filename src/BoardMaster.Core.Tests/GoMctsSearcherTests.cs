@@ -76,5 +76,44 @@ namespace BoardMaster.Core.Tests
             Assert.AreEqual(2, stMove.Value.X, "White 그룹을 따내는 (2,2)를 추천해야 한다");
             Assert.AreEqual(2, stMove.Value.Y, "White 그룹을 따내는 (2,2)를 추천해야 한다");
         }
+
+        public static void Search_TotalVisitCountAcrossCandidates_EqualsIterationCount()
+        {
+            // 루트에서 매 반복(iteration)은 정확히 하나의 루트 자식을 거쳐 역전파되므로, 모든 후보의
+            // 방문 횟수 합은 항상 반복 횟수와 같아야 한다 — MCTS 구현이 맞는지 확인하는 불변식이다.
+            Ont.GameContext objContext = TestFixtures.CreateContext(p_nSize: 5, p_eActiveColor: Ont.E_PlayerColor.Black);
+            Go.GoGameSession objSession = new Go.GoGameSession(objContext);
+
+            AiGo.GoMctsSearcher objSearcher = new AiGo.GoMctsSearcher(p_nMaxRolloutMoves: 60);
+            AiGo.GoMctsSearchResult objResult = objSearcher.Search(objSession, 150, new Random(3));
+
+            int nTotalVisits = 0;
+            foreach (AiGo.GoMctsCandidateStat objCandidate in objResult.CandidateMoves)
+            {
+                nTotalVisits += objCandidate.VisitCount;
+            }
+
+            Assert.AreEqual(150, nTotalVisits, "모든 후보수의 방문 횟수 합은 반복 횟수와 같아야 한다");
+        }
+
+        public static void Search_BestMove_MatchesCandidateWithHighestVisitCount()
+        {
+            Ont.GameContext objContext = TestFixtures.CreateContext(p_nSize: 5, p_eActiveColor: Ont.E_PlayerColor.Black);
+            Go.GoGameSession objSession = new Go.GoGameSession(objContext);
+
+            AiGo.GoMctsSearcher objSearcher = new AiGo.GoMctsSearcher(p_nMaxRolloutMoves: 60);
+            AiGo.GoMctsSearchResult objResult = objSearcher.Search(objSession, 150, new Random(3));
+
+            Assert.IsTrue(objResult.BestMove.HasValue, "탐색 결과가 있어야 한다");
+            Assert.IsTrue(objResult.CandidateMoves.Count > 0, "후보수 목록이 비어 있으면 안 된다");
+
+            AiGo.GoMctsCandidateStat objTopCandidate = objResult.CandidateMoves[0];
+            Assert.AreEqual(objTopCandidate.Move, objResult.BestMove!.Value, "정렬된 후보 목록의 1등이 BestMove와 같아야 한다");
+
+            foreach (AiGo.GoMctsCandidateStat objCandidate in objResult.CandidateMoves)
+            {
+                Assert.IsTrue(objCandidate.VisitCount <= objTopCandidate.VisitCount, "1등 후보의 방문 횟수가 가장 많아야 한다");
+            }
+        }
     }
 }

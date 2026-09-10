@@ -18,13 +18,15 @@ namespace BoardMaster.Core.Rules.Go
     /// m_stForbiddenKoPoint로 기억해 다음 Cond_NotKoRecapture 생성 시 주입합니다. Pass()나 캡처가
     /// 없는 착수는 이 값을 null로 되돌리므로, 제한은 항상 "바로 다음 한 수"에만 걸립니다.
     ///
-    /// 위치 기반 슈퍼코(positional superko)도 막습니다: 매 착수 성공 직후 결과 반상 배치를 문자열
-    /// 키로 만들어 m_setVisitedPositionKeys에 추가하고, 다음 착수를 검증할 때 Cond_NotSuperko가
-    /// "이 착수를 두면 나올 배치가 이미 나온 적 있는지"를 그 집합에서 찾아봅니다. 단순패가 막는
-    /// 경우는 전부 이 검사에도 걸리지만(부분집합), 단순패 쪽이 좌표 비교 한 번으로 끝나는 훨씬 싼
-    /// 검사라 먼저 돌립니다 — 삼패(triple ko)처럼 더 긴 순환은 슈퍼코 쪽만 잡아냅니다.
+    /// 위치 기반 슈퍼코(positional superko)도 막습니다: Zobrist 해시(GoZobristTable)로 반상 배치를
+    /// 추적합니다 — m_ulCurrentPositionHash는 실제 착수가 성공할 때마다 갱신되고,
+    /// m_setVisitedPositionHashes에 쌓입니다. Cond_NotSuperko는 "이 착수를 두면 나올 배치의 해시가
+    /// 이미 나온 적 있는지"를 그 집합에서 찾아보는데, 격자를 복제하지 않고 바뀌는 칸만 XOR해서
+    /// O(포획된 돌 수)로 계산합니다(예전에는 후보 하나마다 O(width*height) 복제+직렬화였습니다).
+    /// 단순패가 막는 경우는 전부 이 검사에도 걸리지만(부분집합), 단순패 쪽이 좌표 비교 한 번으로
+    /// 끝나는 훨씬 싼 검사라 먼저 돌립니다 — 삼패(triple ko)처럼 더 긴 순환은 슈퍼코 쪽만 잡아냅니다.
     /// 이런 식으로 GameContext 자체에는 바둑 전용 상태를 전혀 추가하지 않고, 세션 인스턴스에만
-    /// 이 두 전이 이력을 들고 있습니다.
+    /// 이 이력을 들고 있습니다.
     ///
     /// 페이즈 상태 머신(GamePhaseManager + IGamePhase, Ontology.Dynamic)도 내부에서 씁니다: 페이즈는
     /// [GoMainPlayPhase -> GoGameOverPhase] 두 단계뿐이고, PlayStone/Pass는 항상 EnsureMainPlayPhase로
@@ -39,30 +41,45 @@ namespace BoardMaster.Core.Rules.Go
     ///
     /// Clone()과 GetLegalMoves()는 GoMctsSearcher가 이 세션을 트리 노드의 상태 표현 그 자체로 재사용할
     /// 수 있도록 추가한 것입니다 — MCTS는 같은 국면에서 여러 가상의 미래를 서로 다른 GoGameSession
-    /// 복제본으로 독립적으로 탐색합니다. Clone()은 반상 배치 이력(m_setVisitedPositionKeys)도 통째로
+    /// 복제본으로 독립적으로 탐색합니다. Clone()은 반상 배치 이력(m_setVisitedPositionHashes)도 통째로
     /// 복사해 각 복제본이 서로 다른 슈퍼코 이력을 독립적으로 쌓아갑니다. Effects(Effect_SpawnEntity
     /// 등)는 여전히 매 호출마다 새로 만들지만, BFS 비용이 큰 Cond_NotSuicide는 인스턴스 필드로
     /// 재사용해 GetLegalMoves()가 매번 반상 전체를 훑어도 셀당 새 스캐너를 만들지 않습니다.
+    ///
+    /// 규칙 변형(Modifier): 생성자로 IRuleModifier 목록을 받으면, 매 착수 Action을 조립한 뒤 이
+    /// 목록을 순서대로 적용해 기본 규칙을 끼워 넣거나 대체할 수 있습니다(예: GoNoSuperkoModifier로
+    /// 슈퍼코를 끄고 단순패만 적용하는 변형 룰셋). 기본값(빈 목록)일 때는 GetLegalMoves()가 재사용
+    /// 인스턴스 두 개만 확인하는 빠른 경로를 쓰고, 모디파이어가 하나라도 등록되면 실제 Action 조립
+    /// 결과로 검증하는 느린 경로로 자동 전환합니다 — PlayStone()과 GetLegalMoves()의 판정 기준이
+    /// 모디파이어 유무와 상관없이 항상 일치하도록 보장하기 위해서입니다.
     /// </summary>
     public sealed class GoGameSession
     {
         private readonly OntDyn.ActionDispatcher m_objDispatcher;
         private readonly OntDyn.GamePhaseManager m_objPhaseManager;
         private readonly Cond_NotSuicide m_objSuicideCondition = new Cond_NotSuicide();
-        private readonly HashSet<string> m_setVisitedPositionKeys = new HashSet<string>();
-        private readonly Cond_NotSuperko m_objSuperkoCondition;
+        private readonly HashSet<ulong> m_setVisitedPositionHashes = new HashSet<ulong>();
+        private readonly IReadOnlyList<OntDyn.IRuleModifier> m_lisRuleModifiers;
         private readonly DomainAction m_objLegalityProbeAction = new DomainAction(
             "LegalityProbe", new Ont.ST_ActionData(0, 0, false, Ont.E_PlayerColor.None));
+        private Cond_NotSuperko m_objSuperkoCondition;
+        private ulong m_ulCurrentPositionHash;
         private (int X, int Y)? m_stForbiddenKoPoint;
 
         public Ont.GameContext mv_objCurrentContext { get; private set; }
 
-        public GoGameSession(Ont.GameContext p_objInitialContext, OntDyn.IActionLogger? p_objLogger = null)
+        public GoGameSession(
+            Ont.GameContext p_objInitialContext,
+            OntDyn.IActionLogger? p_objLogger = null,
+            IReadOnlyList<OntDyn.IRuleModifier>? p_lisRuleModifiers = null)
         {
             mv_objCurrentContext = p_objInitialContext ?? throw new ArgumentNullException(nameof(p_objInitialContext));
             m_objDispatcher = new OntDyn.ActionDispatcher(p_objLogger);
-            m_objSuperkoCondition = new Cond_NotSuperko(m_setVisitedPositionKeys);
-            m_setVisitedPositionKeys.Add(CurrentPositionKey());
+            m_lisRuleModifiers = p_lisRuleModifiers ?? Array.Empty<OntDyn.IRuleModifier>();
+
+            m_ulCurrentPositionHash = ComputeCurrentPositionHash();
+            m_setVisitedPositionHashes.Add(m_ulCurrentPositionHash);
+            m_objSuperkoCondition = new Cond_NotSuperko(m_ulCurrentPositionHash, m_setVisitedPositionHashes);
 
             // 페이즈는 [본 플레이 -> 종국] 두 단계뿐이다. Start()가 즉시 IsPhaseCompleted를 확인하므로,
             // 이미 종료된 GameContext(예: 기보 재생으로 만들어진 것)로 세션을 열어도 곧바로
@@ -79,25 +96,25 @@ namespace BoardMaster.Core.Rules.Go
         public string CurrentPhaseName => m_objPhaseManager.CurrentPhase.mv_strPhaseName;
 
         /// <summary>
-        /// 현재 상태(반상, 패 제한, 슈퍼코 이력)를 완전히 격리된 새 GoGameSession으로 복제합니다.
-        /// MCTS가 하나의 국면에서 여러 가상의 미래를 서로 간섭 없이 탐색할 때 씁니다
+        /// 현재 상태(반상, 패 제한, 슈퍼코 이력, 규칙 모디파이어)를 완전히 격리된 새 GoGameSession으로
+        /// 복제합니다. MCTS가 하나의 국면에서 여러 가상의 미래를 서로 간섭 없이 탐색할 때 씁니다
         /// (GameContext.Clone()과 같은 목적의 세션 레벨 버전).
         /// </summary>
         public GoGameSession Clone()
         {
-            GoGameSession objClone = new GoGameSession(mv_objCurrentContext.Clone())
+            GoGameSession objClone = new GoGameSession(mv_objCurrentContext.Clone(), null, m_lisRuleModifiers)
             {
                 m_stForbiddenKoPoint = m_stForbiddenKoPoint
             };
 
             // 생성자가 "현재 한 배치"만으로 이력을 새로 시작해 두었으므로, 원본이 대국 시작부터
             // 쌓아온 전체 배치 이력으로 통째로 덮어써야 한다 — 그래야 복제본도 원본과 같은 슈퍼코
-            // 제약을 물려받는다. Cond_NotSuperko는 이 HashSet을 참조로 들고 있어서, 내용만 바꿔도
-            // 별도로 다시 주입할 필요가 없다.
-            objClone.m_setVisitedPositionKeys.Clear();
-            foreach (string strKey in m_setVisitedPositionKeys)
+            // 제약을 물려받는다. m_ulCurrentPositionHash는 클론 생성자가 이미 같은 배치로부터
+            // 올바르게 계산했으므로(원본과 정확히 같은 값) 따로 덮어쓸 필요가 없다.
+            objClone.m_setVisitedPositionHashes.Clear();
+            foreach (ulong ulHash in m_setVisitedPositionHashes)
             {
-                objClone.m_setVisitedPositionKeys.Add(strKey);
+                objClone.m_setVisitedPositionHashes.Add(ulHash);
             }
 
             return objClone;
@@ -106,9 +123,8 @@ namespace BoardMaster.Core.Rules.Go
         /// <summary>
         /// 현재 활성 플레이어가 지금 합법적으로 둘 수 있는 모든 좌표를 반환합니다(패스는 포함하지 않음 —
         /// 패스는 항상 가능하므로 호출자가 별도로 다룹니다). 종국된 대국이면 빈 리스트를 반환합니다.
-        /// Cond_EmptySpace/Cond_NotKoRecapture/Cond_NotSuicide/Cond_NotSuperko를 그대로 재사용해 실제
-        /// 착수 검증과 완전히 같은 기준으로 판정하므로, 여기 나온 좌표는 곧바로 PlayStone에 넘겨도
-        /// 항상 성공합니다.
+        /// 실제 착수 검증(PlayStone)과 완전히 같은 기준으로 판정하므로, 여기 나온 좌표는 곧바로
+        /// PlayStone에 넘겨도 항상 성공합니다.
         /// </summary>
         public List<(int X, int Y)> GetLegalMoves()
         {
@@ -138,9 +154,7 @@ namespace BoardMaster.Core.Rules.Go
                         continue;
                     }
 
-                    m_objLegalityProbeAction.mv_stActionData = new Ont.ST_ActionData(nX, nY, false, eActiveColor);
-                    if (m_objSuicideCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction)
-                        && m_objSuperkoCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction))
+                    if (IsLegalPlacement(nX, nY, eActiveColor))
                     {
                         lisLegalMoves.Add((nX, nY));
                     }
@@ -166,14 +180,23 @@ namespace BoardMaster.Core.Rules.Go
 
             mv_objCurrentContext = m_objDispatcher.Dispatch(mv_objCurrentContext, objAction);
             m_stForbiddenKoPoint = DetectSingleStoneCapture(objContextBeforeMove, mv_objCurrentContext, p_nX, p_nY);
-            m_setVisitedPositionKeys.Add(CurrentPositionKey());
+
+            // 실제로 반상이 바뀌었으니 현재 배치 해시를 다시 계산하고(이번 한 번만 O(width*height) —
+            // 후보 검증 경로와 달리 실제 착수는 한 판에 많아야 수백 번뿐이라 문제 되지 않는다),
+            // Cond_NotSuperko도 최신 해시로 다시 만든다(그 클래스는 해시를 값으로 캡처해 두므로
+            // 참조를 바꿔주지 않으면 계속 옛 배치 기준으로 판정하게 된다).
+            m_ulCurrentPositionHash = ComputeCurrentPositionHash();
+            m_setVisitedPositionHashes.Add(m_ulCurrentPositionHash);
+            m_objSuperkoCondition = new Cond_NotSuperko(m_ulCurrentPositionHash, m_setVisitedPositionHashes);
+
             m_objPhaseManager.Update(mv_objCurrentContext);
 
             return mv_objCurrentContext;
         }
 
         /// <summary>
-        /// 현재 활성 플레이어가 착수 없이 턴만 넘깁니다. 패스는 아무것도 따내지 않으므로 패 제한을 해제합니다.
+        /// 현재 활성 플레이어가 착수 없이 턴만 넘깁니다. 패스는 반상을 바꾸지 않으므로 패 제한과
+        /// 슈퍼코 해시 모두 그대로 둡니다(패 제한만 해제합니다).
         /// </summary>
         public Ont.GameContext Pass()
         {
@@ -187,6 +210,33 @@ namespace BoardMaster.Core.Rules.Go
             m_objPhaseManager.Update(mv_objCurrentContext);
 
             return mv_objCurrentContext;
+        }
+
+        /// <summary>
+        /// 지금까지의 참가자/수순을 GoKifuSerializer.Export로 그대로 위임하는 편의 메서드입니다.
+        /// </summary>
+        public string ExportKifu()
+        {
+            return GoKifuSerializer.Export(this);
+        }
+
+        /// <summary>
+        /// p_nX, p_nY에 p_eColor로 두는 것이 지금 합법인지 확인합니다. 모디파이어가 없으면(기본값)
+        /// 재사용 인스턴스 두 개만 확인하는 빠른 경로를 쓰고, 모디파이어가 등록되어 있으면 실제
+        /// Action 조립 결과(모디파이어 반영)로 검증하는 느린 경로를 씁니다 — PlayStone()이 실제로
+        /// 쓰는 조립 로직과 항상 같은 기준을 보장하기 위해서입니다.
+        /// </summary>
+        private bool IsLegalPlacement(int p_nX, int p_nY, Ont.E_PlayerColor p_eColor)
+        {
+            if (m_lisRuleModifiers.Count == 0)
+            {
+                m_objLegalityProbeAction.mv_stActionData = new Ont.ST_ActionData(p_nX, p_nY, false, p_eColor);
+                return m_objSuicideCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction)
+                    && m_objSuperkoCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction);
+            }
+
+            DomainAction objProbeAction = CreatePlaceStoneAction(p_nX, p_nY, p_eColor);
+            return objProbeAction.Validate(mv_objCurrentContext);
         }
 
         /// <summary>
@@ -205,23 +255,39 @@ namespace BoardMaster.Core.Rules.Go
         }
 
         /// <summary>
-        /// 지금까지의 참가자/수순을 GoKifuSerializer.Export로 그대로 위임하는 편의 메서드입니다.
+        /// 현재 mv_objCurrentContext의 반상 배치 전체를 훑어 Zobrist 해시를 처음부터 계산합니다.
+        /// 실제 착수가 성공했을 때(한 판에 많아야 수백 번)만 호출되므로 O(width*height) 비용이
+        /// 문제 되지 않습니다 — 후보 수를 검증하는 뜨거운 경로(Cond_NotSuperko)는 이 값을 시작점
+        /// 삼아 바뀌는 칸만 XOR하는 증분 방식이라 이 메서드를 다시 부르지 않습니다.
         /// </summary>
-        public string ExportKifu()
+        private ulong ComputeCurrentPositionHash()
         {
-            return GoKifuSerializer.Export(this);
+            int[,] a_nGrid = mv_objCurrentContext.mv_stCurrentState.m_a_nBoardGrid;
+            int nWidth = a_nGrid.GetLength(0);
+            int nHeight = a_nGrid.GetLength(1);
+            ulong ulHash = 0;
+
+            for (int nY = 0; nY < nHeight; nY++)
+            {
+                for (int nX = 0; nX < nWidth; nX++)
+                {
+                    Ont.E_PlayerColor eColor = (Ont.E_PlayerColor)a_nGrid[nX, nY];
+                    if (eColor != Ont.E_PlayerColor.None)
+                    {
+                        ulHash ^= GoZobristTable.GetValue(nX, nY, eColor);
+                    }
+                }
+            }
+
+            return ulHash;
         }
 
         /// <summary>
-        /// 현재 mv_objCurrentContext의 반상 배치를 슈퍼코 이력 비교용 문자열 키로 정규화합니다.
+        /// internal로 노출해 테스트 프로젝트가 모디파이어 적용 전/후의 조립 결과(조건/효과 목록)를
+        /// 직접 들여다볼 수 있게 했습니다(예: GoNoSuperkoModifier가 실제로 Cond_NotSuperko를
+        /// 빼는지). GetLegalMoves()의 느린 경로(모디파이어가 있을 때)도 이 메서드를 그대로 씁니다.
         /// </summary>
-        private string CurrentPositionKey()
-        {
-            int[,] a_nGrid = mv_objCurrentContext.mv_stCurrentState.m_a_nBoardGrid;
-            return GoBoardPositionKey.Compute(a_nGrid, a_nGrid.GetLength(0), a_nGrid.GetLength(1));
-        }
-
-        private DomainAction CreatePlaceStoneAction(int p_nX, int p_nY, Ont.E_PlayerColor p_eColor)
+        internal DomainAction CreatePlaceStoneAction(int p_nX, int p_nY, Ont.E_PlayerColor p_eColor)
         {
             DomainAction objAction = new DomainAction(
                 "Action_PlayStone",
@@ -230,8 +296,9 @@ namespace BoardMaster.Core.Rules.Go
             // 순서 중요: Cond_EmptySpace가 범위/점유 여부를 먼저 걸러야 한다. Cond_NotSuicide의 BFS는
             // 시작 좌표가 보드 범위 안이라고 가정하므로, 범위 밖 좌표가 먼저 걸러지지 않으면 인덱스 예외가 난다.
             // Cond_NotKoRecapture는 좌표 비교 한 번으로 끝나는 가장 싼 검사라 먼저 두고, Cond_NotSuperko는
-            // 격자 복제+BFS 시뮬레이션까지 필요한 가장 비싼 검사라 마지막에 둔다 — Cond_NotKoRecapture가
-            // 막는 경우는 전부 Cond_NotSuperko도 막지만(부분집합), 순서상 싼 쪽이 먼저 걸러 준다.
+            // (Zobrist로 최적화했어도) 상대 그룹 BFS가 필요할 수 있는 가장 비싼 검사라 마지막에 둔다 —
+            // Cond_NotKoRecapture가 막는 경우는 전부 Cond_NotSuperko도 막지만(부분집합), 순서상 싼 쪽이
+            // 먼저 걸러 준다.
             objAction.mv_lisConditions.Add(new Cond_EmptySpace());
             objAction.mv_lisConditions.Add(new Cond_NotKoRecapture(m_stForbiddenKoPoint));
             objAction.mv_lisConditions.Add(m_objSuicideCondition);
@@ -242,6 +309,14 @@ namespace BoardMaster.Core.Rules.Go
             objAction.mv_lisEffects.Add(new Effect_SpawnEntity());
             objAction.mv_lisEffects.Add(new Effect_CaptureStones());
             objAction.mv_lisEffects.Add(new Effect_SwitchTurn());
+
+            // 등록된 모디파이어를 순서대로 적용한다 — 기본 조립 로직(위)은 손대지 않고, 필요하면
+            // 모디파이어가 조건/효과를 추가하거나(mv_lisConditions.Add) 제거해(RemoveAll 등) 규칙을
+            // 바꾼다. 기본값(빈 목록)일 때는 이 루프가 그냥 아무 일도 하지 않는다.
+            foreach (OntDyn.IRuleModifier objModifier in m_lisRuleModifiers)
+            {
+                objModifier.Apply(objAction, mv_objCurrentContext);
+            }
 
             return objAction;
         }
