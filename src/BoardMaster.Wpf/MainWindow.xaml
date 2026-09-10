@@ -31,9 +31,9 @@
             <TextBlock Text="AI 난이도" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,4" />
             <ComboBox x:Name="DifficultyComboBox" Height="28" Margin="0,0,0,20"
                       SelectedIndex="0" SelectionChanged="DifficultyComboBox_SelectionChanged">
-                <ComboBoxItem Content="초급 (탐색 800회, 응답 ~1.5초)" Tag="800" />
-                <ComboBoxItem Content="중급 (탐색 4000회, 응답 ~4.5초)" Tag="4000" />
-                <ComboBoxItem Content="고급 (탐색 10000회, 응답 ~11초)" Tag="10000" />
+                <ComboBoxItem Content="초급 (탐색 800회, 응답 ~1초)" Tag="800" />
+                <ComboBoxItem Content="중급 (탐색 4000회, 응답 ~3초)" Tag="4000" />
+                <ComboBoxItem Content="고급 (탐색 10000회, 응답 ~7초)" Tag="10000" />
             </ComboBox>
 
             <Button x:Name="PassButton" Content="패스" Height="32" Margin="0,0,0,8" Click="PassButton_Click" />

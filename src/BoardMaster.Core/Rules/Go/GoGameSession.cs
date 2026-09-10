@@ -42,22 +42,29 @@ namespace BoardMaster.Core.Rules.Go
     /// Clone()과 GetLegalMoves()는 GoMctsSearcher가 이 세션을 트리 노드의 상태 표현 그 자체로 재사용할
     /// 수 있도록 추가한 것입니다 — MCTS는 같은 국면에서 여러 가상의 미래를 서로 다른 GoGameSession
     /// 복제본으로 독립적으로 탐색합니다. Clone()은 반상 배치 이력(m_setVisitedPositionHashes)도 통째로
-    /// 복사해 각 복제본이 서로 다른 슈퍼코 이력을 독립적으로 쌓아갑니다. Effects(Effect_SpawnEntity
-    /// 등)는 여전히 매 호출마다 새로 만들지만, BFS 비용이 큰 Cond_NotSuicide는 인스턴스 필드로
-    /// 재사용해 GetLegalMoves()가 매번 반상 전체를 훑어도 셀당 새 스캐너를 만들지 않습니다.
+    /// 복사해 각 복제본이 서로 다른 슈퍼코 이력을 독립적으로 쌓아갑니다.
+    ///
+    /// GetLegalMoves()의 자충수 판정은 GoLibertyCache(그룹별 활로 "개수"만 유지하는 캐시)로 O(1)에
+    /// 처리합니다 — 실제 착수가 성공할 때마다 한 번씩(RebuildLibertyCache) 반상 전체를 다시 훑어
+    /// 그룹/활로를 갱신해 두고, 후보 칸 하나당 이웃 4칸만 조회하면 됩니다(전에는 후보마다 BFS를
+    /// 최대 5번 돌았습니다 — 계측 결과 롤아웃 시간의 약 85%). PlayStone()이 실제로 착수를 검증할
+    /// 때는 여전히 BFS 기반 Cond_NotSuicide를 그대로 씁니다 — GoLibertyCache는 GetLegalMoves()만을
+    /// 위한 지름길이라, 캐시가 잘못돼도 실제 착수 판정 자체는 오염되지 않습니다. 정확성은
+    /// GoLibertyCacheDifferentialTests가 무작위 대국으로 두 경로의 결과를 매 수마다 대조해 보장합니다.
     ///
     /// 규칙 변형(Modifier): 생성자로 IRuleModifier 목록을 받으면, 매 착수 Action을 조립한 뒤 이
     /// 목록을 순서대로 적용해 기본 규칙을 끼워 넣거나 대체할 수 있습니다(예: GoNoSuperkoModifier로
-    /// 슈퍼코를 끄고 단순패만 적용하는 변형 룰셋). 기본값(빈 목록)일 때는 GetLegalMoves()가 재사용
-    /// 인스턴스 두 개만 확인하는 빠른 경로를 쓰고, 모디파이어가 하나라도 등록되면 실제 Action 조립
-    /// 결과로 검증하는 느린 경로로 자동 전환합니다 — PlayStone()과 GetLegalMoves()의 판정 기준이
-    /// 모디파이어 유무와 상관없이 항상 일치하도록 보장하기 위해서입니다.
+    /// 슈퍼코를 끄고 단순패만 적용하는 변형 룰셋). 기본값(빈 목록)일 때는 GetLegalMoves()가 위의
+    /// 빠른 경로를 쓰고, 모디파이어가 하나라도 등록되면 실제 Action 조립 결과로 검증하는 느린
+    /// 경로로 자동 전환합니다 — PlayStone()과 GetLegalMoves()의 판정 기준이 모디파이어 유무와
+    /// 상관없이 항상 일치하도록 보장하기 위해서입니다.
     /// </summary>
     public sealed class GoGameSession
     {
         private readonly OntDyn.ActionDispatcher m_objDispatcher;
         private readonly OntDyn.GamePhaseManager m_objPhaseManager;
         private readonly Cond_NotSuicide m_objSuicideCondition = new Cond_NotSuicide();
+        private readonly GoLibertyCache m_objLibertyCache = new GoLibertyCache();
         private readonly HashSet<ulong> m_setVisitedPositionHashes = new HashSet<ulong>();
         private readonly IReadOnlyList<OntDyn.IRuleModifier> m_lisRuleModifiers;
         private readonly DomainAction m_objLegalityProbeAction = new DomainAction(
@@ -80,6 +87,7 @@ namespace BoardMaster.Core.Rules.Go
             m_ulCurrentPositionHash = ComputeCurrentPositionHash();
             m_setVisitedPositionHashes.Add(m_ulCurrentPositionHash);
             m_objSuperkoCondition = new Cond_NotSuperko(m_ulCurrentPositionHash, m_setVisitedPositionHashes);
+            RebuildLibertyCache();
 
             // 페이즈는 [본 플레이 -> 종국] 두 단계뿐이다. Start()가 즉시 IsPhaseCompleted를 확인하므로,
             // 이미 종료된 GameContext(예: 기보 재생으로 만들어진 것)로 세션을 열어도 곧바로
@@ -188,6 +196,7 @@ namespace BoardMaster.Core.Rules.Go
             m_ulCurrentPositionHash = ComputeCurrentPositionHash();
             m_setVisitedPositionHashes.Add(m_ulCurrentPositionHash);
             m_objSuperkoCondition = new Cond_NotSuperko(m_ulCurrentPositionHash, m_setVisitedPositionHashes);
+            RebuildLibertyCache();
 
             m_objPhaseManager.Update(mv_objCurrentContext);
 
@@ -222,17 +231,29 @@ namespace BoardMaster.Core.Rules.Go
 
         /// <summary>
         /// p_nX, p_nY에 p_eColor로 두는 것이 지금 합법인지 확인합니다. 모디파이어가 없으면(기본값)
-        /// 재사용 인스턴스 두 개만 확인하는 빠른 경로를 쓰고, 모디파이어가 등록되어 있으면 실제
-        /// Action 조립 결과(모디파이어 반영)로 검증하는 느린 경로를 씁니다 — PlayStone()이 실제로
-        /// 쓰는 조립 로직과 항상 같은 기준을 보장하기 위해서입니다.
+        /// GoLibertyCache로 자충수를 O(1)에 판정하는 빠른 경로를 쓰고, 모디파이어가 등록되어 있으면
+        /// 실제 Action 조립 결과(모디파이어 반영)로 검증하는 느린 경로를 씁니다 — PlayStone()이
+        /// 실제로 쓰는 조립 로직과 항상 같은 기준을 보장하기 위해서입니다.
+        /// GoLibertyCache 기반 자충수 판정은 GetLegalMoves()의 지름길일 뿐입니다 — PlayStone()의 실제
+        /// 검증(CreatePlaceStoneAction → Cond_NotSuicide)은 여전히 BFS 버전을 그대로 쓰므로, 이 캐시가
+        /// 잘못돼도 실제 착수 판정에는 영향이 없습니다. 정확성은
+        /// GoLibertyCacheDifferentialTests가 무작위 대국으로 두 경로의 결과를 대조해 보장합니다.
         /// </summary>
         private bool IsLegalPlacement(int p_nX, int p_nY, Ont.E_PlayerColor p_eColor)
         {
             if (m_lisRuleModifiers.Count == 0)
             {
+                int[,] a_nGrid = mv_objCurrentContext.mv_stCurrentState.m_a_nBoardGrid;
+                int nWidth = a_nGrid.GetLength(0);
+                int nHeight = a_nGrid.GetLength(1);
+
+                if (!m_objLibertyCache.IsNonSuicidePlacement(a_nGrid, nWidth, nHeight, p_nX, p_nY, p_eColor))
+                {
+                    return false;
+                }
+
                 m_objLegalityProbeAction.mv_stActionData = new Ont.ST_ActionData(p_nX, p_nY, false, p_eColor);
-                return m_objSuicideCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction)
-                    && m_objSuperkoCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction);
+                return m_objSuperkoCondition.IsSatisfied(mv_objCurrentContext, m_objLegalityProbeAction);
             }
 
             DomainAction objProbeAction = CreatePlaceStoneAction(p_nX, p_nY, p_eColor);
@@ -280,6 +301,18 @@ namespace BoardMaster.Core.Rules.Go
             }
 
             return ulHash;
+        }
+
+        /// <summary>
+        /// GoLibertyCache를 현재 반상 배치로 처음부터 다시 계산합니다. ComputeCurrentPositionHash와
+        /// 마찬가지로 실제 착수가 성공했을 때만 호출되므로 O(width*height) 비용이 문제 되지 않습니다.
+        /// </summary>
+        private void RebuildLibertyCache()
+        {
+            int[,] a_nGrid = mv_objCurrentContext.mv_stCurrentState.m_a_nBoardGrid;
+            int nWidth = a_nGrid.GetLength(0);
+            int nHeight = a_nGrid.GetLength(1);
+            m_objLibertyCache.Rebuild(a_nGrid, nWidth, nHeight);
         }
 
         /// <summary>
