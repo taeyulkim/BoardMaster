@@ -62,6 +62,25 @@ namespace BoardMaster.Core.Rules.Go
         /// </summary>
         public static GoGameSession Replay(GoKifuRecord p_objRecord, OntDyn.IActionLogger? p_objLogger = null)
         {
+            return ReplayInternal(p_objRecord, p_objLogger, null);
+        }
+
+        /// <summary>
+        /// Replay와 완전히 같은 방식으로 재생하되, 매 수 이후의 GameContext 스냅샷을 전부 모아
+        /// 반환합니다(인덱스 0 = 첫 수를 두기 전 초기 상태, 인덱스 N = N번째 수까지 둔 상태).
+        /// 기보 재생 UI처럼 임의의 수 시점으로 즉시 이동해야 하는 호출자를 위한 것입니다 — 매번
+        /// 처음부터 다시 재생하지 않고 이미 계산해 둔 스냅샷 리스트를 인덱싱하기만 하면 됩니다.
+        /// </summary>
+        public static IReadOnlyList<Ont.GameContext> ReplaySnapshots(GoKifuRecord p_objRecord, OntDyn.IActionLogger? p_objLogger = null)
+        {
+            List<Ont.GameContext> lisSnapshots = new List<Ont.GameContext>();
+            ReplayInternal(p_objRecord, p_objLogger, lisSnapshots);
+            return lisSnapshots;
+        }
+
+        private static GoGameSession ReplayInternal(
+            GoKifuRecord p_objRecord, OntDyn.IActionLogger? p_objLogger, List<Ont.GameContext>? p_lisSnapshotsOut)
+        {
             if (p_objRecord is null)
             {
                 throw new ArgumentNullException(nameof(p_objRecord));
@@ -83,6 +102,7 @@ namespace BoardMaster.Core.Rules.Go
             }
 
             GoGameSession objSession = new GoGameSession(objContext, p_objLogger);
+            p_lisSnapshotsOut?.Add(objSession.mv_objCurrentContext);
 
             foreach (GoKifuMoveRecord objMove in p_objRecord.Moves)
             {
@@ -103,6 +123,8 @@ namespace BoardMaster.Core.Rules.Go
                 {
                     objSession.PlayStone(objMove.X, objMove.Y);
                 }
+
+                p_lisSnapshotsOut?.Add(objSession.mv_objCurrentContext);
             }
 
             return objSession;

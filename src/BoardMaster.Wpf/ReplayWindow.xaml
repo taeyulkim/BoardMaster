@@ -1,0 +1,47 @@
+<Window x:Class="BoardMaster.Wpf.ReplayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BoardMaster - 기보 재생" Height="760" Width="820"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F0E6">
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="240" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" BorderBrush="#8B5A2B" BorderThickness="2" Background="#DEB887" CornerRadius="4"
+                HorizontalAlignment="Center" VerticalAlignment="Top">
+            <Canvas x:Name="BoardCanvas" Background="Transparent" />
+        </Border>
+
+        <StackPanel Grid.Column="2" VerticalAlignment="Top">
+            <TextBlock Text="기보 재생" FontSize="22" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock x:Name="InfoText" FontSize="12" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+            <TextBlock x:Name="MoveCounterText" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
+
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="|&lt;" Height="28" Margin="0,0,2,0" Click="FirstButton_Click" />
+                <Button Grid.Column="1" Content="&lt;" Height="28" Margin="2,0" Click="PrevButton_Click" />
+                <Button Grid.Column="2" Content="&gt;" Height="28" Margin="2,0" Click="NextButton_Click" />
+                <Button Grid.Column="3" Content="&gt;|" Height="28" Margin="2,0,0,0" Click="LastButton_Click" />
+            </Grid>
+
+            <TextBlock Text="수순" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <ListBox x:Name="MoveListBox" Height="280" FontSize="11" FontFamily="Consolas"
+                     BorderBrush="#C0B296" Background="#FBF8F2"
+                     SelectionChanged="MoveListBox_SelectionChanged" Margin="0,0,0,16" />
+
+            <Button Content="파일에서 열기" Height="30" Margin="0,0,0,8" Click="OpenButton_Click" />
+            <Button x:Name="SaveButton" Content="다른 이름으로 저장" Height="30" Click="SaveButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -93,6 +93,53 @@ namespace BoardMaster.Core.Tests
                 "기록된 색상이 실제 차례와 다르면 손상된 기보로 간주해 예외를 던져야 한다");
         }
 
+        public static void ReplaySnapshots_ReturnsOneMoreSnapshotThanMoveCount_WithFinalSnapshotMatchingReplay()
+        {
+            Go.GoGameSession objOriginalSession = PlayScriptedGameWithCapture();
+            string strJson = objOriginalSession.ExportKifu();
+            Go.GoKifuRecord objRecord = Go.GoKifuSerializer.Parse(strJson);
+
+            IReadOnlyList<Ont.GameContext> lisSnapshots = Go.GoKifuSerializer.ReplaySnapshots(objRecord);
+
+            Assert.AreEqual(
+                objRecord.Moves.Count + 1, lisSnapshots.Count,
+                "스냅샷 개수는 (수 개수 + 초기 상태 1개)여야 한다");
+            Assert.AreEqual(
+                (int)Ont.E_PlayerColor.None, lisSnapshots[0].mv_stCurrentState.m_a_nBoardGrid[2, 2],
+                "인덱스 0(초기 상태)은 아직 어떤 수도 반영되지 않은 빈 보드여야 한다");
+
+            Ont.GameContext objFinalSnapshot = lisSnapshots[^1];
+            Ont.GameContext objReplayedFinal = Go.GoKifuSerializer.Replay(objRecord).mv_objCurrentContext;
+
+            Assert.AreEqual(
+                objReplayedFinal.mv_isGameOver, objFinalSnapshot.mv_isGameOver,
+                "마지막 스냅샷은 Replay()의 최종 상태와 종국 여부가 같아야 한다");
+            Assert.AreEqual(
+                objReplayedFinal.mv_stCurrentState.m_nBlackPrisoners, objFinalSnapshot.mv_stCurrentState.m_nBlackPrisoners,
+                "마지막 스냅샷은 Replay()의 최종 상태와 포로 수가 같아야 한다");
+        }
+
+        public static void ReplaySnapshots_IntermediateSnapshot_ReflectsBoardStateAtThatPoint()
+        {
+            Go.GoGameSession objOriginalSession = PlayScriptedGameWithCapture();
+            string strJson = objOriginalSession.ExportKifu();
+            Go.GoKifuRecord objRecord = Go.GoKifuSerializer.Parse(strJson);
+
+            IReadOnlyList<Ont.GameContext> lisSnapshots = Go.GoKifuSerializer.ReplaySnapshots(objRecord);
+
+            // 첫 수(인덱스 1) 직후에는 Black(1,2) 하나만 놓여 있어야 하고, White(2,2)를 따내는
+            // 7번째 수(인덱스 7) 이전인 6번째 수(인덱스 6)까지는 아직 White(2,2)가 살아있어야 한다.
+            Assert.AreEqual(
+                (int)Ont.E_PlayerColor.Black, lisSnapshots[1].mv_stCurrentState.m_a_nBoardGrid[1, 2],
+                "인덱스 1(첫 수 직후)에는 Black(1,2)이 놓여 있어야 한다");
+            Assert.AreEqual(
+                (int)Ont.E_PlayerColor.White, lisSnapshots[6].mv_stCurrentState.m_a_nBoardGrid[2, 2],
+                "인덱스 6(따내기 직전)에는 White(2,2)가 아직 살아있어야 한다");
+            Assert.AreEqual(
+                (int)Ont.E_PlayerColor.None, lisSnapshots[7].mv_stCurrentState.m_a_nBoardGrid[2, 2],
+                "인덱스 7(따낸 직후)에는 White(2,2)가 제거되어 있어야 한다");
+        }
+
         public static void Parse_RoundTrips_ExportedJson()
         {
             Go.GoGameSession objSession = PlayScriptedGameWithCapture();

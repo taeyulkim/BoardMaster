@@ -128,6 +128,19 @@ namespace BoardMaster.Wpf
             StartNewGame();
         }
 
+        /// <summary>
+        /// 현재 세션의 기보(진행 중이든 종료됐든 상관없이 지금까지 둔 수순)를 그 시점의 스냅샷으로
+        /// 내보내 별도의 ReplayWindow에서 보여줍니다. 비모달로 열어서 재생 창을 띄워 둔 채로도
+        /// MainWindow에서 계속 대국을 진행할 수 있습니다(재생 창은 열던 순간의 스냅샷이라 자동으로
+        /// 갱신되지는 않습니다 — 다시 보려면 새로 열면 됩니다).
+        /// </summary>
+        private void ViewKifuButton_Click(object sender, RoutedEventArgs e)
+        {
+            string strKifuJson = m_objSession.ExportKifu();
+            ReplayWindow objReplayWindow = new ReplayWindow(strKifuJson) { Owner = this };
+            objReplayWindow.Show();
+        }
+
         private void DifficultyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (DifficultyComboBox.SelectedItem is ComboBoxItem objItem
