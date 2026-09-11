@@ -25,6 +25,11 @@ namespace BoardMaster.Wpf
             OpenGameWindow(new WarWindow());
         }
 
+        private void GuryongTuButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGameWindow(new GuryongTuWindow());
+        }
+
         private void OpenGameWindow(Window p_objGameWindow)
         {
             Hide();

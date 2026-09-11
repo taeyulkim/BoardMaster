@@ -1,0 +1,61 @@
+<Window x:Class="BoardMaster.Wpf.GuryongTuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BoardMaster - 구룡투" Height="700" Width="760"
+        ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        Background="#2B1B3D">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock Text="구룡투 (九龍鬪)" FontSize="26" FontWeight="Bold" Foreground="White" />
+            <TextBlock x:Name="ScoreText" FontSize="13" Foreground="#D8C9E8" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="220" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Top">
+                <TextBlock Text="상대" Foreground="#D8C9E8" FontSize="13" HorizontalAlignment="Center" Margin="0,10,0,4" />
+                <Border x:Name="WhiteCardBorder" Width="80" Height="110" Background="White" CornerRadius="6" BorderBrush="Black" BorderThickness="2" HorizontalAlignment="Center">
+                    <TextBlock x:Name="WhiteCardText" FontSize="32" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <TextBlock x:Name="RoundResultText" FontSize="18" FontWeight="Bold" Foreground="#FFD700"
+                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Width="320" Margin="0,16" />
+
+                <Border x:Name="BlackCardBorder" Width="80" Height="110" Background="White" CornerRadius="6" BorderBrush="Black" BorderThickness="2" HorizontalAlignment="Center">
+                    <TextBlock x:Name="BlackCardText" FontSize="32" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="나" Foreground="#D8C9E8" FontSize="13" HorizontalAlignment="Center" Margin="0,4,0,16" />
+
+                <TextBlock Text="내 타일 — 클릭해서 내기" Foreground="White" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                <UniformGrid x:Name="TileButtonPanel" Rows="1" Columns="9" HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <Border Grid.Column="1" Background="#1F1230" CornerRadius="6" Padding="10">
+                <StackPanel>
+                    <TextBlock Text="라운드 기록" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <ListBox x:Name="LogListBox" Height="480" FontSize="11" FontFamily="Consolas"
+                             Background="#150C21" Foreground="White" BorderThickness="0" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <TextBlock x:Name="StatusText" Grid.Row="2" FontSize="13" Foreground="White" TextWrapping="Wrap" Margin="0,12,0,8" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button x:Name="NewGameButton" Content="새 게임" Width="100" Height="34" Margin="4" Click="NewGameButton_Click" />
+            <Button x:Name="ViewRulesButton" Content="규칙 보기" Width="100" Height="34" Margin="4" Click="ViewRulesButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
