@@ -30,6 +30,11 @@ namespace BoardMaster.Wpf
             OpenGameWindow(new GuryongTuWindow());
         }
 
+        private void ChessButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGameWindow(new ChessWindow());
+        }
+
         private void OpenGameWindow(Window p_objGameWindow)
         {
             Hide();
