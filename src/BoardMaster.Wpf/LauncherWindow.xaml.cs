@@ -35,6 +35,11 @@ namespace BoardMaster.Wpf
             OpenGameWindow(new ChessWindow());
         }
 
+        private void GreatKingdomButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGameWindow(new GreatKingdomWindow());
+        }
+
         private void OpenGameWindow(Window p_objGameWindow)
         {
             Hide();
