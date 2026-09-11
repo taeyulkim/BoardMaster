@@ -44,9 +44,10 @@
 
             <Border Grid.Column="1" Background="#1F1230" CornerRadius="6" Padding="10">
                 <StackPanel>
-                    <TextBlock Text="라운드 기록" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,6" />
-                    <ListBox x:Name="LogListBox" Height="480" FontSize="11" FontFamily="Consolas"
-                             Background="#150C21" Foreground="White" BorderThickness="0" />
+                    <Expander x:Name="LogExpander" Header="라운드 기록" Foreground="White" FontWeight="SemiBold" IsExpanded="True">
+                        <ListBox x:Name="LogListBox" Height="480" FontSize="11" FontFamily="Consolas"
+                                 Background="#150C21" Foreground="White" BorderThickness="0" Margin="0,6,0,0" />
+                    </Expander>
                 </StackPanel>
             </Border>
         </Grid>
