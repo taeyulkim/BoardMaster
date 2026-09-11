@@ -13,6 +13,7 @@
         <Button x:Name="WarButton" Content="War (카드 게임)" Width="220" Height="44" FontSize="14" Margin="0,0,0,12" Click="WarButton_Click" />
         <Button x:Name="GuryongTuButton" Content="구룡투 (심리 대전)" Width="220" Height="44" FontSize="14" Margin="0,0,0,12" Click="GuryongTuButton_Click" />
         <Button x:Name="ChessButton" Content="체스 (vs MCTS AI)" Width="220" Height="44" FontSize="14" Margin="0,0,0,12" Click="ChessButton_Click" />
-        <Button x:Name="GreatKingdomButton" Content="그레이트 킹덤 (vs MCTS AI)" Width="220" Height="44" FontSize="14" Click="GreatKingdomButton_Click" />
+        <Button x:Name="GreatKingdomButton" Content="그레이트 킹덤 (vs MCTS AI)" Width="220" Height="44" FontSize="14" Margin="0,0,0,12" Click="GreatKingdomButton_Click" />
+        <Button x:Name="NineKnightsButton" Content="나인 나이츠 (vs 휴리스틱 AI)" Width="220" Height="44" FontSize="14" Click="NineKnightsButton_Click" />
     </StackPanel>
 </Window>

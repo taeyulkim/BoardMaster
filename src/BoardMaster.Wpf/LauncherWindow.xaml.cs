@@ -40,6 +40,11 @@ namespace BoardMaster.Wpf
             OpenGameWindow(new GreatKingdomWindow());
         }
 
+        private void NineKnightsButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGameWindow(new NineKnightsWindow());
+        }
+
         private void OpenGameWindow(Window p_objGameWindow)
         {
             Hide();
