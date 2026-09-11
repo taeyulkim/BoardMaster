@@ -1,7 +1,7 @@
 <Window x:Class="BoardMaster.Wpf.ChessWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BoardMaster - 체스" Height="720" Width="820"
+        Title="BoardMaster - 체스" Height="760" Width="820"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
         Background="#F5F0E6">
@@ -20,16 +20,33 @@
 
         <StackPanel Grid.Column="2" VerticalAlignment="Top">
             <TextBlock Text="체스" FontSize="22" FontWeight="Bold" Margin="0,0,0,4" />
-            <TextBlock Text="vs 무작위 AI" FontSize="12" Foreground="Gray" Margin="0,0,0,16" />
+            <TextBlock Text="vs MCTS AI" FontSize="12" Foreground="Gray" Margin="0,0,0,16" />
 
             <TextBlock x:Name="TurnText" Text="현재 차례: White(사용자)" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4" />
             <TextBlock x:Name="CheckText" FontSize="13" Foreground="Firebrick" Margin="0,0,0,4" />
             <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16" />
 
+            <TextBlock Text="AI 난이도" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <ComboBox x:Name="DifficultyComboBox" Height="28" Margin="0,0,0,16"
+                      SelectedIndex="0" SelectionChanged="DifficultyComboBox_SelectionChanged">
+                <ComboBoxItem Content="초급 (탐색 300회, 응답 ~1초)" Tag="300" />
+                <ComboBoxItem Content="중급 (탐색 800회, 응답 ~3초)" Tag="800" />
+                <ComboBoxItem Content="고급 (탐색 2000회, 응답 ~8초)" Tag="2000" />
+            </ComboBox>
+
             <Button x:Name="NewGameButton" Content="새 게임" Height="32" Margin="0,0,0,8" Click="NewGameButton_Click" />
-            <Button x:Name="ViewRulesButton" Content="규칙 보기" Height="32" Margin="0,0,0,24" Click="ViewRulesButton_Click" />
+            <Button x:Name="ViewRulesButton" Content="규칙 보기" Height="32" Margin="0,0,0,16" Click="ViewRulesButton_Click" />
 
             <TextBlock x:Name="ResultText" FontSize="13" FontWeight="Bold" TextWrapping="Wrap" Foreground="#B71C1C" Margin="0,0,0,16" />
+
+            <Expander x:Name="CandidateExpander" Header="AI 후보수 분석 (직전 수)" IsExpanded="True" FontSize="13" FontWeight="SemiBold">
+                <StackPanel Margin="0,6,0,0">
+                    <TextBlock Text="방문 횟수가 많을수록 탐색이 그 수를 더 신뢰한다는 뜻입니다." FontSize="10"
+                               Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,6" />
+                    <ListBox x:Name="CandidateListBox" Height="180" FontSize="11" FontFamily="Consolas"
+                             BorderBrush="#C0B296" Background="#FBF8F2" />
+                </StackPanel>
+            </Expander>
         </StackPanel>
     </Grid>
 </Window>

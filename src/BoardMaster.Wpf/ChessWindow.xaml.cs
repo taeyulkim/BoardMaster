@@ -6,6 +6,7 @@ using System.Windows.Shapes;
 using Ont = BoardMaster.Core.Ontology;
 using OntDyn = BoardMaster.Core.Ontology.Dynamic;
 using Chess = BoardMaster.Core.Rules.Chess;
+using AiChess = BoardMaster.Core.AI.Chess;
 
 namespace BoardMaster.Wpf
 {
@@ -15,21 +16,26 @@ namespace BoardMaster.Wpf
     /// 클릭 처리 외에는 규칙을 전혀 재구현하지 않았습니다 — 합법수 판정, 체크/체크메이트/스테일메이트,
     /// 캐슬링, 앙파상, 승진은 전부 ChessGameSession/ChessMoveGenerator의 몫입니다.
     ///
-    /// AI(Black)는 GoMctsSearcher 같은 탐색이 아니라 합법수 중 균등 무작위 선택입니다 — 체스용 탐색
-    /// AI를 만드는 건 이 프로젝트의 목적(규칙 엔진이 이 장르도 감당하는지 증명하는 것)을 벗어나는
-    /// 별도의 큰 작업이라 일부러 손대지 않았습니다.
+    /// AI(Black)는 GoMctsSearcher와 같은 구조의 ChessMctsSearcher(정책/가치망 없는 순수 UCT,
+    /// 균등 무작위 롤아웃)를 씁니다. Go와 달리 체크메이트/스테일메이트가 아니면 롤아웃이 자연히
+    /// 안 끝날 수 있어서(쓰리폴드/50수 규칙 없음), 한도에 걸리면 간단한 기물 점수 우세로 대신
+    /// 추정합니다(ChessMctsSearcher 문서 참고). 난이도별 반복 횟수는 실제 응답 시간을 재서 골랐습니다
+    /// (Release 빌드 기준 300회 ~1초 / 800회 ~3초 / 2000회 ~8초).
     /// </summary>
     public partial class ChessWindow : Window
     {
         private const double CELL_SIZE = 58;
         private const int BOARD_SIZE = 8;
+        private const int DEFAULT_AI_ITERATIONS = 300; // 초급 — DifficultyComboBox의 SelectedIndex="0"과 짝을 맞춘 값.
 
-        private static readonly Random s_objAiRandom = new();
+        private readonly AiChess.ChessMctsSearcher m_objAiSearcher = new();
+        private readonly Random m_objAiRandom = new();
 
         private Chess.ChessGameSession m_objSession = null!;
         private (int X, int Y)? m_stSelectedSquare;
         private List<Chess.ChessMove> m_lisSelectedPieceMoves = new();
         private bool m_bAiThinking;
+        private int m_nAiSearchIterations = DEFAULT_AI_ITERATIONS;
 
         public ChessWindow()
         {
@@ -45,10 +51,21 @@ namespace BoardMaster.Wpf
             m_bAiThinking = false;
 
             ResultText.Text = string.Empty;
+            CandidateListBox.ItemsSource = null;
             SetStatus("White(사용자) 차례입니다. 기물을 클릭해 선택하세요.", Brushes.DarkGreen);
 
             RedrawBoard();
             UpdateStatusPanel();
+        }
+
+        private void DifficultyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (DifficultyComboBox.SelectedItem is ComboBoxItem objItem
+                && objItem.Tag is string strTag
+                && int.TryParse(strTag, out int nIterations))
+            {
+                m_nAiSearchIterations = nIterations;
+            }
         }
 
         private void NewGameButton_Click(object sender, RoutedEventArgs e)
@@ -147,17 +164,23 @@ namespace BoardMaster.Wpf
         {
             m_bAiThinking = true;
             NewGameButton.IsEnabled = false;
-            SetStatus("AI(Black)가 생각 중입니다...", Brushes.DarkOrange);
+            DifficultyComboBox.IsEnabled = false;
+            SetStatus($"AI(Black)가 생각 중입니다... (탐색 {m_nAiSearchIterations}회)", Brushes.DarkOrange);
 
-            (int FromX, int FromY, int ToX, int ToY)? stAiMove = await Task.Run(() => PickRandomAiMove());
+            int nIterationsForThisMove = m_nAiSearchIterations;
+            AiChess.ChessMctsSearchResult objSearchResult = await Task.Run(
+                () => m_objAiSearcher.Search(m_objSession, nIterationsForThisMove, m_objAiRandom));
 
-            if (stAiMove is { } stMove)
+            if (objSearchResult.BestMove is { } stMove)
             {
                 m_objSession.MovePiece(stMove.FromX, stMove.FromY, stMove.ToX, stMove.ToY);
             }
 
+            PopulateCandidatePanel(objSearchResult);
+
             m_bAiThinking = false;
             NewGameButton.IsEnabled = true;
+            DifficultyComboBox.IsEnabled = true;
 
             RedrawBoard();
             UpdateStatusPanel();
@@ -173,37 +196,32 @@ namespace BoardMaster.Wpf
         }
 
         /// <summary>
-        /// Black이 지금 둘 수 있는 모든 합법수를 반상 전체를 훑어 모은 뒤 균등 무작위로 하나 고릅니다.
-        /// 체크메이트/스테일메이트가 아닌 이상 최소 하나는 있음이 보장됩니다(그렇지 않다면 이미
-        /// 종국 처리되어 이 메서드가 호출되지 않았을 것입니다).
+        /// 직전 AI 탐색에서 루트가 실제로 펼쳐본 후보 수들을 방문 횟수 순으로 보여줍니다(이미
+        /// ChessMctsSearcher.Search가 방문 횟수 내림차순으로 정렬해서 반환합니다).
         /// </summary>
-        private (int FromX, int FromY, int ToX, int ToY)? PickRandomAiMove()
+        private void PopulateCandidatePanel(AiChess.ChessMctsSearchResult p_objResult)
         {
-            List<(int FromX, int FromY, int ToX, int ToY)> lisCandidates = new();
+            const int MAX_DISPLAYED = 10;
 
-            for (int nY = 0; nY < BOARD_SIZE; nY++)
+            List<string> lisLines = new();
+            int nCount = Math.Min(p_objResult.CandidateMoves.Count, MAX_DISPLAYED);
+
+            for (int i = 0; i < nCount; i++)
             {
-                for (int nX = 0; nX < BOARD_SIZE; nX++)
-                {
-                    Ont.Entity? objPiece = m_objSession.GetPieceAt(nX, nY);
-                    if (objPiece is null || objPiece.mv_eColor != Ont.E_PlayerColor.Black)
-                    {
-                        continue;
-                    }
+                AiChess.ChessMctsCandidateStat objCandidate = p_objResult.CandidateMoves[i];
+                bool bIsChosen = p_objResult.BestMove.HasValue && objCandidate.Move == p_objResult.BestMove.Value;
+                string strMoveLabel = $"{ToAlgebraic(objCandidate.Move.FromX, objCandidate.Move.FromY)}-{ToAlgebraic(objCandidate.Move.ToX, objCandidate.Move.ToY)}";
+                string strMarker = bIsChosen ? "▶" : " ";
 
-                    foreach (Chess.ChessMove stMove in m_objSession.GetLegalMoves(nX, nY))
-                    {
-                        lisCandidates.Add((nX, nY, stMove.ToX, stMove.ToY));
-                    }
-                }
+                lisLines.Add($"{strMarker} {strMoveLabel,-6} 방문 {objCandidate.VisitCount,4}회  승률 {objCandidate.WinRate * 100,5:0.0}%");
             }
 
-            if (lisCandidates.Count == 0)
-            {
-                return null;
-            }
+            CandidateListBox.ItemsSource = lisLines;
+        }
 
-            return lisCandidates[s_objAiRandom.Next(lisCandidates.Count)];
+        private static string ToAlgebraic(int p_nX, int p_nY)
+        {
+            return $"{(char)('a' + p_nX)}{p_nY + 1}";
         }
 
         private void UpdateStatusPanel()
@@ -400,6 +418,6 @@ namespace BoardMaster.Wpf
 · 이 구현은 체크메이트/스테일메이트만 종국 조건으로 봅니다 — 쓰리폴드 반복이나 50수 규칙 같은 무승부 조건은 생략했습니다.
 
 AI
-상대(Black)는 탐색 없이 합법수 중 하나를 균등 무작위로 고릅니다.";
+상대(Black)는 정책/가치망 없는 순수 MCTS(UCT, 균등 무작위 롤아웃)입니다. 체크메이트/체크가 아니면 게임이 안 끝나서 롤아웃이 도중에 끊길 수 있는데, 이때는 간단한 기물 점수 우세(폰1/나이트3/비숍3/룩5/퀸9)로 대신 판단합니다. 난이도는 탐색 반복 횟수만 다릅니다.";
     }
 }

@@ -63,6 +63,45 @@ namespace BoardMaster.Core.Rules.Chess
             return ChessMoveGenerator.GetLegalMoves(mv_objCurrentContext, p_nX, p_nY, m_stCastlingRights, m_stEnPassantTarget);
         }
 
+        /// <summary>
+        /// p_eColor가 지금 둘 수 있는 모든 합법수를 반상 전체를 훑어 모읍니다(출발/도착 좌표만).
+        /// ChessMctsSearcher의 후보 생성과, 무작위 상대 AI/자기 대국 테스트가 공통으로 쓰는
+        /// "이 색이 지금 뭘 둘 수 있나"라는 질문에 대한 단일 진입점입니다.
+        /// </summary>
+        public List<(int FromX, int FromY, int ToX, int ToY)> GetAllLegalMoves(Ont.E_PlayerColor p_eColor)
+        {
+            List<(int FromX, int FromY, int ToX, int ToY)> lisMoves = new List<(int FromX, int FromY, int ToX, int ToY)>();
+
+            foreach (Ont.Entity objPiece in ChessZoneQuery.FindActivePieces(mv_objCurrentContext, p_eColor))
+            {
+                int nX = objPiece.mv_objLocatedZone.mv_nX;
+                int nY = objPiece.mv_objLocatedZone.mv_nY;
+
+                foreach (ChessMove stMove in GetLegalMoves(nX, nY))
+                {
+                    lisMoves.Add((nX, nY, stMove.ToX, stMove.ToY));
+                }
+            }
+
+            return lisMoves;
+        }
+
+        /// <summary>
+        /// 현재 상태(반상, 캐슬링 권리, 앙파상 대상 칸)를 완전히 격리된 새 ChessGameSession으로
+        /// 복제합니다. Go/War의 Clone()과 같은 목적입니다 — ChessMctsSearcher가 하나의 국면에서
+        /// 여러 가상의 미래를 서로 간섭 없이 탐색할 때 씁니다.
+        /// </summary>
+        public ChessGameSession Clone()
+        {
+            ChessGameSession objClone = new ChessGameSession(mv_objCurrentContext.Clone())
+            {
+                m_stCastlingRights = m_stCastlingRights,
+                m_stEnPassantTarget = m_stEnPassantTarget
+            };
+
+            return objClone;
+        }
+
         public Ont.GameContext MovePiece(int p_nFromX, int p_nFromY, int p_nToX, int p_nToY)
         {
             EnsureMainPlayPhase();

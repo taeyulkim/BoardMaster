@@ -12,6 +12,43 @@ namespace BoardMaster.Core.Tests
             Assert.AreEqual("MainPlay", objSession.CurrentPhaseName, "시작 시점엔 MainPlay 페이즈여야 한다");
         }
 
+        public static void GetAllLegalMoves_OnStandardOpening_Returns20MovesForWhite()
+        {
+            Chess.ChessGameSession objSession = new Chess.ChessGameSession(Chess.ChessGameFactory.CreateStandardGame());
+
+            List<(int FromX, int FromY, int ToX, int ToY)> lisMoves = objSession.GetAllLegalMoves(Ont.E_PlayerColor.White);
+
+            Assert.AreEqual(20, lisMoves.Count, "표준 초기 배치에서 White의 첫 수는 정확히 20개(폰 16 + 나이트 4)여야 한다");
+        }
+
+        public static void Clone_ProducesIndependentSession_MutatingCloneDoesNotAffectOriginal()
+        {
+            Chess.ChessGameSession objOriginal = new Chess.ChessGameSession(Chess.ChessGameFactory.CreateStandardGame());
+
+            Chess.ChessGameSession objClone = objOriginal.Clone();
+            objClone.MovePiece(4, 1, 4, 3); // e2-e4
+
+            Assert.IsTrue(objOriginal.GetPieceAt(4, 1) is not null, "복제본에 둔 수가 원본 세션에 영향을 주면 안 된다");
+            Assert.IsTrue(objClone.GetPieceAt(4, 1) is null, "복제본 자신은 정상적으로 착수가 반영되어야 한다");
+        }
+
+        public static void Clone_PreservesCastlingRightsAndEnPassantTarget()
+        {
+            Ont.GameContext objContext = ChessTestFixtures.CreateEmptyBoardContext(Ont.E_PlayerColor.Black);
+            ChessTestFixtures.PlacePiece(objContext, Ont.E_PlayerColor.White, Chess.ChessPieceType.King, 4, 0);
+            ChessTestFixtures.PlacePiece(objContext, Ont.E_PlayerColor.Black, Chess.ChessPieceType.King, 4, 7);
+            ChessTestFixtures.PlacePiece(objContext, Ont.E_PlayerColor.White, Chess.ChessPieceType.Pawn, 4, 4); // e5
+            ChessTestFixtures.PlacePiece(objContext, Ont.E_PlayerColor.Black, Chess.ChessPieceType.Pawn, 3, 6); // d7
+            Chess.ChessGameSession objOriginal = new Chess.ChessGameSession(objContext);
+
+            objOriginal.MovePiece(3, 6, 3, 4); // Black d7-d5(더블스텝) -> 앙파상 대상 칸(3,5) 생성
+
+            Chess.ChessGameSession objClone = objOriginal.Clone();
+            Ont.GameContext objResult = objClone.MovePiece(4, 4, 3, 5); // White exd6 e.p. — 복제본이 원본의 앙파상 상태를 물려받았는지 확인
+
+            Assert.IsTrue(Chess.ChessZoneQuery.FindPieceAt(objResult, 3, 4) is null, "복제본도 원본과 같은 앙파상 대상 칸을 물려받아 포획이 성립해야 한다");
+        }
+
         public static void MovePiece_MovesPawnForward_AndSwitchesTurn()
         {
             Chess.ChessGameSession objSession = new Chess.ChessGameSession(Chess.ChessGameFactory.CreateStandardGame());
