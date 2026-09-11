@@ -45,6 +45,11 @@ namespace BoardMaster.Wpf
             OpenGameWindow(new NineKnightsWindow());
         }
 
+        private void KingsCrownButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGameWindow(new KingsCrownWindow());
+        }
+
         private void OpenGameWindow(Window p_objGameWindow)
         {
             Hide();
